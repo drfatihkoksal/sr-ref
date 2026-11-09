@@ -6,6 +6,8 @@ authors:
     given-names: "Fatih"
     orcid: "https://orcid.org/0000-0002-4197-4683"
     affiliation: "Department of Cardiology, University of Health Sciences, Bursa Yüksek İhtisas Training and Research Hospital, Bursa, Türkiye"
+version: "1.0.0"
+date-released: "2026-11-09"
 license: MIT
 repository-code: "https://github.com/drfatihkoksal/sr-ref"
 keywords:
