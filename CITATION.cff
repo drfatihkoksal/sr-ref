@@ -8,6 +8,14 @@ authors:
     affiliation: "Department of Cardiology, University of Health Sciences, Bursa Yüksek İhtisas Training and Research Hospital, Bursa, Türkiye"
 version: "1.0.0"
 date-released: "2026-11-09"
+doi: "10.5281/zenodo.24085928"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.24085928"
+    description: "Zenodo concept DOI (all versions)"
+  - type: doi
+    value: "10.5281/zenodo.24085929"
+    description: "Zenodo DOI of version 1.0.0"
 license: MIT
 repository-code: "https://github.com/drfatihkoksal/sr-ref"
 keywords:

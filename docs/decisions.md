@@ -386,7 +386,8 @@ Dated record of approved and frozen definitions. Times are UTC+03:00.
     code, reports and aggregate results. The development history stays in the local branch `wp1-wp2-stage-a`; commit
     identifiers cited above (for example `0d6bbed`, the Emory run, and `5783bfe`, the locked MIMIC-IV-ECG run) refer to
     it. The locked MIMIC-IV-ECG code is unchanged and can be checked against `prereg/mimic_manifest.json`. The concept
-    note and the unfrozen analysis plan draft are not public. Figures 1-4 are drawn by `src/figures.py`.
+    note and the unfrozen analysis plan draft are not public. Figures 1-4 are drawn by `src/figures.py`. Release v1.0.0 is
+    archived at Zenodo (version DOI 10.5281/zenodo.24085929; concept DOI 10.5281/zenodo.24085928).
 
 ## Open
 
