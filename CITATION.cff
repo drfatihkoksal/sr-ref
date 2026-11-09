@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite it as below."
+title: "SR-REF: code for the between-electrocardiogram reliability of sinus rhythm-referenced criteria for outflow tract premature ventricular complexes"
+authors:
+  - family-names: "Köksal"
+    given-names: "Fatih"
+    orcid: "https://orcid.org/0000-0002-4197-4683"
+    affiliation: "Department of Cardiology, University of Health Sciences, Bursa Yüksek İhtisas Training and Research Hospital, Bursa, Türkiye"
+license: MIT
+repository-code: "https://github.com/drfatihkoksal/sr-ref"
+keywords:
+  - electrocardiography
+  - premature ventricular complexes
+  - outflow tract
+  - reliability
+  - preregistration
+references:
+  - type: generic
+    title: "SR-REF MIMIC-IV-ECG replication preregistration (Open Science Framework)"
+    doi: "10.17605/OSF.IO/WYX28"

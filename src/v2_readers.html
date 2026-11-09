@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V2 Ölçümü</title>
+<style>
+:root {
+  --bg: #f6f6f3; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #deded8;
+  --grid-minor: #f3d9d9; --grid-major: #e7b3b3; --trace: #1d1d1b; --zero: #6b6b66;
+  --accent: #2457c5; --ok: #2e7d32; --part: #b26a00; --no: #c62828; --todo: #b5b5ae; --r: #b3261e; --s: #2457c5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413; --panel: #1e1e1c; --ink: #ecece6; --muted: #a3a39b; --line: #34342f;
+    --grid-minor: #2f2424; --grid-major: #4a3030; --trace: #ecece6; --zero: #a3a39b;
+    --accent: #7aa2ff; --ok: #66bb6a; --part: #ffb74d; --no: #ef5350; --todo: #5f5f59; --r: #ff8a80; --s: #7aa2ff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+.progress { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.bar { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar > div { height: 100%; background: var(--ok); width: 0; }
+button, label.btn { font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+button:hover, label.btn:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.on { background: var(--part); border-color: var(--part); color: #fff; }
+kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); }
+#saved { font-size: 12px; color: var(--muted); }
+#saved.warn { color: var(--no); font-weight: 600; }
+.layout { display: grid; grid-template-columns: 132px minmax(0, 1fr); }
+nav { border-right: 1px solid var(--line); background: var(--panel); padding: 8px; position: sticky; top: 49px;
+  height: calc(100vh - 49px); overflow-y: auto; }
+.list { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.chip { font: 12px ui-monospace, monospace; padding: 3px 0; border-radius: 4px; text-align: center; cursor: pointer;
+  border: 1px solid var(--line); border-left: 4px solid var(--todo); background: var(--panel); color: var(--ink); }
+.chip.done { border-left-color: var(--ok); }
+.chip.part { border-left-color: var(--part); }
+.chip.cur { outline: 2px solid var(--accent); outline-offset: -1px; }
+main { padding: 12px 16px 48px; min-width: 0; }
+.casehead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.casehead h2 { margin: 0; font: 600 20px ui-monospace, monospace; }
+.casehead .pos { color: var(--muted); font-size: 13px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+.card h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+canvas { display: block; width: 100%; cursor: crosshair; }
+.panels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 900px) { .panels { grid-template-columns: 1fr; } .layout { grid-template-columns: 1fr; } nav { position: static; height: auto; } }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.read { font: 13px ui-monospace, monospace; color: var(--muted); margin-left: auto; }
+textarea { width: 100%; min-height: 40px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+details summary { cursor: pointer; font-weight: 600; }
+.notice p { margin: 6px 0; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">V2 ölçümü</h1>
+  <div class="progress"><span id="count">0 / 0</span><div class="bar"><div id="fill"></div></div></div>
+  <button id="zoom" title="Taban çizgisi çevresini büyütür">Yakınlaştır <kbd>Z</kbd></button>
+  <button id="prev">← Önceki</button>
+  <button id="next">Sonraki →</button>
+  <button id="todo">Eksik</button>
+  <button class="primary" id="export">CSV indir</button>
+  <label class="btn">CSV yükle<input id="import" type="file" accept=".csv" hidden></label>
+  <span id="saved"></span>
+</header>
+<div class="layout">
+  <nav><div class="list" id="list"></div></nav>
+  <main>
+    <details class="card notice" id="help">
+      <summary>Yönerge</summary>
+      <p>Her vakada aynı EKG'nin <b>V2</b> derivasyonunda VES ve sinüs atımı var. Sıfır çizgisi taban çizgisidir. Dikey çizgiler 20 ms'de birdir; genlik ölçeği ızgaranın sol kenarında yazar.</p>
+      <p><b>R için</b> QRS'in en yüksek pozitif sapmasına, taban çizgisinin üstünde tıklayın. <b>S için</b> QRS'in en derin negatif sapmasına, taban çizgisinin altında tıklayın. Tıklama 8 ms içindeki tepe veya dibe yapışır; tekrar tıklayarak düzeltebilirsiniz.</p>
+      <p><b>QS kompleksinde</b> negatif dibi S olarak işaretleyin ve "R yok" seçin. Sapmanın gerçek bir dalga değil, gürültü veya taban oynaması olduğunu düşünüyorsanız o dalga için "R yok" ya da "S yok" seçin. Küçük r dalgalarını görmek için <b>Yakınlaştır</b> düğmesini kullanın. Okunamıyorsa "Ölçülemez" seçin.</p>
+      <p>Bir vaka, iki atımın da tamamlanmasıyla biter. Sıra sizin için karıştırılmıştır. Vakaları diğer okuyucuyla, formlar teslim edilene kadar konuşmayın.</p>
+      <p>Cevaplar bu tarayıcıda saklanır; ara ara ve bitince <b>CSV indir</b> ile dışa aktarın. Sayfa hasta düzeyinde EKG dalgası içerir: paylaşmayın.</p>
+      <p>Kısayollar: <kbd>Z</kbd> yakınlaştır, <kbd>→</kbd>/<kbd>←</kbd> sonraki/önceki vaka.</p>
+    </details>
+    <div class="casehead"><h2 id="code"></h2><span class="pos" id="pos"></span></div>
+    <div class="panels">
+      <div class="card"><h3>VES, V2</h3><canvas id="c_pvc"></canvas>
+        <div class="tools"><button data-panel="pvc" data-act="noR">R yok</button><button data-panel="pvc" data-act="noS">S yok</button>
+          <button data-panel="pvc" data-act="bad">Ölçülemez</button><button data-panel="pvc" data-act="clear">Temizle</button><span class="read" id="r_pvc"></span></div></div>
+      <div class="card"><h3>Sinüs, V2</h3><canvas id="c_sr"></canvas>
+        <div class="tools"><button data-panel="sr" data-act="noR">R yok</button><button data-panel="sr" data-act="noS">S yok</button>
+          <button data-panel="sr" data-act="bad">Ölçülemez</button><button data-panel="sr" data-act="clear">Temizle</button><span class="read" id="r_sr"></span></div></div>
+    </div>
+    <div class="card"><textarea id="note" placeholder="Not (isteğe bağlı)"></textarea></div>
+  </main>
+</div>
+<script>
+const DATA = /*__DATA__*/null;
+const KEY = "v2r_" + DATA.reader + "_" + DATA.sample_id, SNAP = 4, H = 360, ZOOM_UV = 300;
+const PANELS = ["pvc", "sr"], views = {};
+let answers = {}, cur = 0, storageOk = true, zoom = false;
+
+function load() { try { answers = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { storageOk = false; answers = {}; } }
+function save() {
+  const el = document.getElementById("saved");
+  try { localStorage.setItem(KEY, JSON.stringify(answers)); el.textContent = "Kaydedildi"; el.className = ""; }
+  catch (e) { storageOk = false; el.textContent = "Tarayıcı deposu yok: sık sık CSV indirin"; el.className = "warn"; }
+}
+function series(c, panel) {
+  const bin = atob(c[panel]), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return Float32Array.from(new Int16Array(u8.buffer), v => v * c.scale);
+}
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function slot(code, panel) {
+  answers[code] = answers[code] || {};
+  return answers[code][panel] = answers[code][panel] || {};
+}
+const pDone = p => !!p && (p.bad || ((p.noR || p.R != null) && (p.noS || p.S != null)));
+const pAny = p => !!p && (p.bad || p.noR || p.noS || p.R != null || p.S != null);
+function state(code) {
+  const a = answers[code] || {};
+  return pDone(a.pvc) && pDone(a.sr) ? "done" : pAny(a.pvc) || pAny(a.sr) ? "part" : "";
+}
+function draw(panel, c) {
+  const canvas = document.getElementById("c_" + panel), dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || canvas.parentNode.clientWidth;
+  canvas.width = Math.round(w * dpr); canvas.height = Math.round(H * dpr); canvas.style.height = H + "px";
+  const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, H);
+  const vals = series(c, panel), n = vals.length;
+  let hi = zoom ? ZOOM_UV : Math.max(200, ...vals), lo = zoom ? -ZOOM_UV : Math.min(-200, ...vals);
+  if (!zoom) { const m = (hi - lo) * 0.08; hi += m; lo -= m; }
+  const px = i => i * (w - 1) / (n - 1), py = v => H * (hi - v) / (hi - lo);
+  views[panel] = {vals, lo, hi, w};
+  for (const [step, col] of [[10, css("--grid-minor")], [50, css("--grid-major")]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath();
+    for (let i = (DATA.t0 % step); i < n; i += step) { ctx.moveTo(px(i), 0); ctx.lineTo(px(i), H); }
+    ctx.stroke();
+  }
+  const minor = H / ((hi - lo) / 100) >= 7 ? 100 : 500, major = zoom ? 100 : 500;
+  ctx.font = "11px system-ui"; ctx.fillStyle = css("--muted");
+  for (const [step, col] of [[minor, css("--grid-minor")], [major, css("--grid-major")]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath();
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) { ctx.moveTo(0, py(v)); ctx.lineTo(w, py(v)); }
+    ctx.stroke();
+  }
+  for (let v = Math.ceil(lo / major) * major; v <= hi; v += major) if (v) ctx.fillText((v / 1000).toFixed(1) + " mV", 3, py(v) - 2);
+  ctx.strokeStyle = css("--zero"); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(0, py(0)); ctx.lineTo(w, py(0)); ctx.stroke();
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, H); ctx.clip();
+  ctx.strokeStyle = css("--trace"); ctx.lineWidth = 1.5; ctx.beginPath();
+  vals.forEach((v, i) => i ? ctx.lineTo(px(i), py(v)) : ctx.moveTo(px(i), py(v))); ctx.stroke();
+  const a = (answers[c.code] || {})[panel] || {};
+  ctx.font = "bold 13px system-ui"; ctx.textAlign = "center";
+  if (a.R != null && a.Ri != null) { ctx.fillStyle = css("--r"); ctx.beginPath(); ctx.arc(px(a.Ri), py(vals[a.Ri]), 4, 0, 7); ctx.fill(); ctx.fillText("R", px(a.Ri), Math.max(14, py(vals[a.Ri]) - 8)); }
+  if (a.S != null && a.Si != null) { ctx.fillStyle = css("--s"); ctx.beginPath(); ctx.arc(px(a.Si), py(vals[a.Si]), 4, 0, 7); ctx.fill(); ctx.fillText("S", px(a.Si), Math.min(H - 4, py(vals[a.Si]) + 18)); }
+  ctx.restore(); ctx.textAlign = "start";
+  const mv = v => (v / 1000).toFixed(2) + " mV";
+  document.getElementById("r_" + panel).textContent = a.bad ? "ölçülemez" : "R " + (a.noR ? "yok" : a.R != null ? mv(a.R) : "–") + " · S " + (a.noS ? "yok" : a.S != null ? mv(a.S) : "–");
+  document.querySelectorAll(`.tools button[data-panel="${panel}"]`).forEach(b => b.classList.toggle("on", !!a[b.dataset.act]));
+}
+function renderList() {
+  const list = document.getElementById("list"); list.innerHTML = "";
+  DATA.cases.forEach((c, i) => {
+    const d = document.createElement("div"); d.className = "chip " + state(c.code) + (i === cur ? " cur" : "");
+    d.textContent = c.code; d.onclick = () => show(i); list.appendChild(d);
+  });
+  const done = DATA.cases.filter(c => state(c.code) === "done").length;
+  document.getElementById("count").textContent = done + " / " + DATA.cases.length;
+  document.getElementById("fill").style.width = (100 * done / DATA.cases.length) + "%";
+}
+function show(i) {
+  cur = Math.max(0, Math.min(DATA.cases.length - 1, i));
+  const c = DATA.cases[cur];
+  document.getElementById("code").textContent = c.code;
+  document.getElementById("pos").textContent = (cur + 1) + ". vaka / " + DATA.cases.length;
+  document.getElementById("note").value = (answers[c.code] || {}).note || "";
+  PANELS.forEach(p => draw(p, c)); renderList();
+}
+function touch(code) { answers[code].t = new Date().toISOString(); save(); show(cur); }
+function onClick(panel, ev) {
+  const c = DATA.cases[cur], v = views[panel], rect = ev.target.getBoundingClientRect(), n = v.vals.length;
+  const a = slot(c.code, panel); if (a.bad) return;
+  const i = Math.max(0, Math.min(n - 1, Math.round((ev.clientX - rect.left) * (n - 1) / (v.w - 1))));
+  const val = v.hi - (ev.clientY - rect.top) / H * (v.hi - v.lo);
+  let best = i;
+  for (let k = Math.max(0, i - SNAP); k <= Math.min(n - 1, i + SNAP); k++) if (val >= 0 ? v.vals[k] > v.vals[best] : v.vals[k] < v.vals[best]) best = k;
+  if (val >= 0) { a.R = Math.max(0, v.vals[best]); a.Ri = best; a.noR = false; }
+  else { a.S = Math.max(0, -v.vals[best]); a.Si = best; a.noS = false; }
+  touch(c.code);
+}
+function onTool(panel, act) {
+  const code = DATA.cases[cur].code, a = slot(code, panel);
+  if (act === "clear") answers[code][panel] = {};
+  else if (act === "bad") { const b = !a.bad; answers[code][panel] = b ? {bad: true} : {}; }
+  else if (act === "noR") { a.noR = !a.noR; a.bad = false; if (a.noR) { a.R = null; a.Ri = null; } }
+  else if (act === "noS") { a.noS = !a.noS; a.bad = false; if (a.noS) { a.S = null; a.Si = null; } }
+  touch(code);
+}
+function csvText() {
+  const esc = s => '"' + String(s || "").replace(/"/g, '""') + '"', num = v => v == null ? "" : (+v).toFixed(1);
+  const cell = p => {
+    p = p || {};
+    const st = p.bad ? "unmeasurable" : pDone(p) ? "ok" : "";
+    return [p.noR ? "0.0" : num(p.R), p.noS ? "0.0" : num(p.S), p.Ri == null ? "" : p.Ri, p.Si == null ? "" : p.Si, st];
+  };
+  const rows = ["code,pvc_R,pvc_S,pvc_Ri,pvc_Si,pvc_state,sr_R,sr_S,sr_Ri,sr_Si,sr_state,note,updated"].concat(
+    DATA.cases.map(c => c.code).sort().map(code => { const a = answers[code] || {};
+      return [code, ...cell(a.pvc), ...cell(a.sr), esc(a.note), a.t || ""].join(","); }));
+  return rows.join("\n") + "\n";
+}
+function exportCsv() {
+  const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csvText()], {type: "text/csv"}));
+  link.download = DATA.reader + "_form.csv"; link.click(); URL.revokeObjectURL(link.href);
+}
+function importCsv(file) {
+  file.text().then(text => {
+    const back = (R, S, Ri, Si, st) => {
+      if (st === "unmeasurable") return {bad: true};
+      const p = {};
+      if (R !== "") { if (Ri === "" && +R === 0) p.noR = true; else { p.R = +R; p.Ri = Ri === "" ? null : +Ri; } }
+      if (S !== "") { if (Si === "" && +S === 0) p.noS = true; else { p.S = +S; p.Si = Si === "" ? null : +Si; } }
+      return p;
+    };
+    for (const line of text.trim().split(/\r?\n/).slice(1)) {
+      const m = line.match(/^([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),"((?:[^"]|"")*)",(.*)$/);
+      if (m) answers[m[1]] = {pvc: back(m[2], m[3], m[4], m[5], m[6]), sr: back(m[7], m[8], m[9], m[10], m[11]), note: m[12].replace(/""/g, '"'), t: m[13]};
+    }
+    save(); show(cur);
+  });
+}
+PANELS.forEach(p => document.getElementById("c_" + p).addEventListener("click", e => onClick(p, e)));
+document.querySelectorAll(".tools button").forEach(b => b.onclick = () => onTool(b.dataset.panel, b.dataset.act));
+document.getElementById("note").addEventListener("input", e => { const c = DATA.cases[cur].code; answers[c] = answers[c] || {}; answers[c].note = e.target.value; save(); });
+function toggleZoom() { zoom = !zoom; document.getElementById("zoom").classList.toggle("on", zoom); show(cur); }
+document.getElementById("zoom").onclick = toggleZoom;
+document.getElementById("prev").onclick = () => show(cur - 1);
+document.getElementById("next").onclick = () => show(cur + 1);
+document.getElementById("todo").onclick = () => { const i = DATA.cases.findIndex(c => state(c.code) !== "done"); if (i >= 0) show(i); };
+document.getElementById("export").onclick = exportCsv;
+document.getElementById("import").onchange = e => e.target.files[0] && importCsv(e.target.files[0]);
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "TEXTAREA") return;
+  if (e.key === "z" || e.key === "Z") toggleZoom();
+  else if (e.key === "ArrowRight") show(cur + 1);
+  else if (e.key === "ArrowLeft") show(cur - 1);
+});
+window.addEventListener("resize", () => show(cur));
+document.getElementById("title").textContent = "V2 ölçümü: " + DATA.name;
+load(); if (!storageOk) save();
+if (!Object.keys(answers).length) document.getElementById("help").open = true;
+show(0);
+</script>
+</body>
+</html>

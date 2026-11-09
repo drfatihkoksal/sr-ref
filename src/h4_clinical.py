@@ -1,0 +1,140 @@
+"""H4 in clinical units (post hoc, label-free; docs/decisions.md item 28).
+
+How much does electrode placement move PVC criteria between two ECGs of the same patient, and how
+much of that does the own-SR transform remove? Primary-stratum pairs of `src.h4` on HEEDB-MGH and
+HEEDB-EUH; κ frozen (objects/kappa.json).
+
+Correction in lead space: A (3 x 3, from the two SR loops, `h4.fit_a`) acts on the part of the
+8-lead PVC template that the Kors matrix K maps to the VCG; the rest is kept:
+L' = K⁺ A K L + (I − K⁺ K) L. With A = I, L' = L; in the VCG, K L' = A K L, as in H4.
+
+Measures (V1–V6 R fraction r = R / (R + S), R and S the largest positive local maximum and the
+deepest negative local minimum within the QRS; RECON-ORIGIN `criteria.tz` for the transition):
+- PVC precordial transition, continuous (where r crosses 0.5, in leads) and graded (0.5 steps);
+- PVC r in V2;
+- the published SR-referenced criteria, each recording with its own SR: V2 transition ratio
+  (r_V2 PVC / r_V2 SR, floor 0.01; LVOT call ≥ 0.60) and TZ index (graded PVC TZ − SR TZ; LVOT
+  call < 0; continuous version for the size of the change).
+Per pair: |change| between the two recordings, raw (PVC as recorded) and corrected (PVC of one
+recording mapped by its own-SR transform to the other, both directions averaged); share of pairs
+whose graded transition differs (corrected: mean of the two directions), or whose published call
+flips. Medians, shares with Wilson 95% CIs; raw vs corrected compared by the paired two-sided
+Wilcoxon signed-rank test.
+
+    python -m src.h4_clinical   -> docs/wp2_h4_clinical.md
+"""
+import json
+
+import numpy as np
+import pandas as pd
+from scipy.stats import wilcoxon
+
+from src.audit import wilson
+from src.config import DOCS, KORS, LEADS8
+from src.h4 import OBJ, OUT, fit_a, sr_loop
+from src.records import extremum
+
+KP = np.linalg.pinv(KORS)                  # 8 x 3
+RES = np.eye(8) - KP @ KORS
+V = [LEADS8.index(f"V{k}") for k in range(1, 7)]
+V2 = LEADS8.index("V2")
+
+
+def tz(r, graded=True):
+    """RECON-ORIGIN criteria.tz (unchanged)."""
+    for i, v in enumerate(r):
+        if v >= 0.5:
+            if i == 0:
+                return 1.0
+            if graded:
+                return i + 1.0 if v <= 0.6 else i + 0.5
+            return i + (0.5 - r[i - 1]) / (v - r[i - 1])
+    return 6.5
+
+
+def rfrac(T, on, off):
+    r = []
+    for li in range(T.shape[0]):
+        R, S = extremum(T[li], on, off, 1), extremum(T[li], on, off, -1)
+        r.append(R / (R + S) if R + S > 0 else 0.0)
+    return np.array(r)
+
+
+def measures(P, S, p_on, p_off, s_on, s_off):
+    rp, rs = rfrac(P, p_on, p_off), rfrac(S, s_on, s_off)
+    return {"tz_c": tz(rp[V], False), "tz_g": tz(rp[V]), "r_v2": rp[V2],
+            "v2tr": rp[V2] / max(rs[V2], 0.01),
+            "tzi_g": tz(rp[V]) - tz(rs[V]), "tzi_c": tz(rp[V], False) - tz(rs[V], False)}
+
+
+def correct(L, A):
+    return KP @ A @ KORS @ L + RES @ L
+
+
+def site_table(site, kappa):
+    rec = pd.read_parquet(OUT / f"{site}_records.parquet")
+    tmpl = np.load(OUT / f"{site}_templates.npy", allow_pickle=True)
+    pairs = pd.read_parquet(OUT / f"{site}_pairs.parquet")
+    pr = pairs[pairs.stratum.str.startswith("primary")]
+    rows = []
+    for i, j in zip(pr.i, pr.j):
+        a, b = tmpl[i], tmpl[j]
+        a12 = fit_a(sr_loop(a), sr_loop(b), kappa)
+        a21 = fit_a(sr_loop(b), sr_loop(a), kappa)
+        m1 = measures(a["pvc"], a["sr"], a["pvc_on"], a["pvc_off"], a["sr_on"], a["sr_off"])
+        m2 = measures(b["pvc"], b["sr"], b["pvc_on"], b["pvc_off"], b["sr_on"], b["sr_off"])
+        c12 = measures(correct(a["pvc"], a12), b["sr"], a["pvc_on"], a["pvc_off"], b["sr_on"], b["sr_off"])
+        c21 = measures(correct(b["pvc"], a21), a["sr"], b["pvc_on"], b["pvc_off"], a["sr_on"], a["sr_off"])
+        rows.append({
+            "tz_c_raw": abs(m1["tz_c"] - m2["tz_c"]),
+            "tz_c_cor": (abs(c12["tz_c"] - m2["tz_c"]) + abs(c21["tz_c"] - m1["tz_c"])) / 2,
+            "tz_g_flip_raw": m1["tz_g"] != m2["tz_g"],
+            "tz_g_flip_cor": ((c12["tz_g"] != m2["tz_g"]) + (c21["tz_g"] != m1["tz_g"])) / 2,   # mean of both directions
+            "r_v2_raw": abs(m1["r_v2"] - m2["r_v2"]),
+            "r_v2_cor": (abs(c12["r_v2"] - m2["r_v2"]) + abs(c21["r_v2"] - m1["r_v2"])) / 2,
+            "tzi_c_raw": abs(m1["tzi_c"] - m2["tzi_c"]),
+            "tzi_flip": (m1["tzi_g"] < 0) != (m2["tzi_g"] < 0),
+            "v2tr_flip": (m1["v2tr"] >= 0.60) != (m2["v2tr"] >= 0.60),
+        })
+    return pd.DataFrame(rows)
+
+
+def share(x):
+    k, n = int(np.sum(x)), len(x)
+    lo, hi = wilson(k, n)
+    return f"{k / n:.1%} ({lo:.1%} to {hi:.1%})"
+
+
+def med(x):
+    return f"{np.median(x):.2f} [{np.percentile(x, 25):.2f}, {np.percentile(x, 75):.2f}]"
+
+
+def main():
+    kappa = json.loads((OBJ / "kappa.json").read_text())["kappa"]
+    lines = ["# H4 in clinical units (post hoc, label-free)", "",
+             "Generated by `python -m src.h4_clinical`; definitions in the module docstring; `docs/decisions.md`",
+             "item 28. Primary-stratum pairs (≤ 365 days), κ frozen. Values: median [IQR] of the between-recording",
+             "change; shares with Wilson 95% CIs.", ""]
+    for site in ("mgh", "euh"):
+        d = site_table(site, kappa)
+        d.to_parquet(OUT / f"{site}_h4_clinical.parquet")
+        p_tz = wilcoxon(d.tz_c_raw, d.tz_c_cor).pvalue
+        p_v2 = wilcoxon(d.r_v2_raw, d.r_v2_cor).pvalue
+        diff = d.tz_g_flip_raw.astype(float) - d.tz_g_flip_cor
+        p_flip = wilcoxon(diff[diff != 0]).pvalue if (diff != 0).any() else np.nan
+        lines += [f"## HEEDB-{site.upper()} ({len(d)} patients)", "",
+                  "| Measure | Raw (as recorded) | Own-SR corrected | p |", "|---|---|---|---|",
+                  f"| PVC precordial transition, |change| in leads | {med(d.tz_c_raw)} | {med(d.tz_c_cor)} | {p_tz:.1e} |",
+                  f"| PVC transition change ≥ 0.5 lead | {share(d.tz_c_raw >= 0.5)} | {share(d.tz_c_cor >= 0.5)} | |",
+                  f"| PVC transition change ≥ 1 lead | {share(d.tz_c_raw >= 1)} | {share(d.tz_c_cor >= 1)} | |",
+                  f"| PVC graded transition differs | {share(d.tz_g_flip_raw)} | {d.tz_g_flip_cor.mean():.1%} (mean of both directions) | {p_flip:.1e} |",
+                  f"| PVC r in V2, |change| | {med(d.r_v2_raw)} | {med(d.r_v2_cor)} | {p_v2:.1e} |", "",
+                  "Published SR-referenced criteria, each recording with its own SR (no transform):", "",
+                  f"- TZ index (continuous), |change| in leads: {med(d.tzi_c_raw)}; call (< 0) flips in {share(d.tzi_flip)}.",
+                  f"- V2 transition ratio: call (≥ 0.60) flips in {share(d.v2tr_flip)}.", ""]
+    (DOCS / "wp2_h4_clinical.md").write_text("\n".join(lines) + "\n")
+    print("\n".join(lines))
+
+
+if __name__ == "__main__":
+    main()

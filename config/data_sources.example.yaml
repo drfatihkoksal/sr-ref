@@ -1,0 +1,14 @@
+# Copy to config/data_sources.local.yaml (not committed) and set absolute paths.
+ningbo_iva: /path/to/ningbo_iva            # raw (not denoised) files, figshare c.4668086.v2
+incart: /path/to/incartdb                  # PhysioNet St Petersburg INCART 12-lead arrhythmia database
+ptbxl: /path/to/ptb-xl-1.0.3               # original PhysioNet release (not the Challenge 2021 copy)
+mimic_iv_ecg: /path/to/mimic-iv-ecg/1.0
+mimic_iv: /path/to/mimiciv/3.1   # hosp/patients.csv.gz only (sex, age for H4 donors; credentialed)
+heedb: /path/to/heedb                      # BDSP HEEDB; ECG/I0001 = MGH, ECG/I0006 = Emory (EUH)
+recon_origin: /path/to/recon-origin        # repository: ported code and disclosed results
+recon_origin_artifacts: /path/to/recon_origin_artifacts  # adjudicated Ningbo templates (agreement check)
+jecg_models: /path/to/models_k12           # JECG PVC masked autoencoders (H6 reconstruction)
+jecg_sinus_models: /path/to/models_sinus_k12
+artifacts: /path/to/sr_ref_artifacts       # row-level outputs of this project
+ludb: /path/to/ludb/1.0.1/data             # LUDB expert QRS bounds (QRS duration calibration)
+beat_classifier: /path/to/beatnet.pt              # JECG MIT-BIH beat classifier (with model_card.json)
